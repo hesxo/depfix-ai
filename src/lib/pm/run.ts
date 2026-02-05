@@ -1,5 +1,5 @@
 import { execa } from "execa";
-import { PackageManager, RunOptions, RunResult } from "./types";
+import { PackageManager, RunOptions, RunResult } from "./types.js";
 
 export async function runPmCommand(
   pm: PackageManager,

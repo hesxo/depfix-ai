@@ -1,52 +1,22 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import { scanEnv } from "./scan";
-import { renderEnv } from "./render";
-import { logInfo, logError } from "../ui/log";
+import { scanEnv } from "./scan.js";
+import { renderEnv } from "./render.js";
+import { logInfo, logError } from "../ui/log.js";
 
-interface EnvGenerateFlags {
+export interface EnvGenerateFlags {
   out: string;
   create: boolean;
   force: boolean;
   check: boolean;
 }
 
-function parseEnvArgs(argv: string[]): EnvGenerateFlags {
-  const flags: EnvGenerateFlags = {
-    out: ".env.example",
-    create: false,
-    force: false,
-    check: false,
-  };
-
-  for (let i = 0; i < argv.length; i++) {
-    const arg = argv[i];
-    switch (arg) {
-      case "--out":
-        if (argv[i + 1]) {
-          flags.out = argv[i + 1];
-          i++;
-        } else {
-          logError("Missing value for --out");
-        }
-        break;
-      case "--create":
-        flags.create = true;
-        break;
-      case "--force":
-        flags.force = true;
-        break;
-      case "--check":
-        flags.check = true;
-        break;
-      default:
-        logError(`Unknown flag or argument: ${arg}`);
-        break;
-    }
-  }
-
-  return flags;
-}
+const defaultEnvFlags: EnvGenerateFlags = {
+  out: ".env.example",
+  create: false,
+  force: false,
+  check: false,
+};
 
 async function fileExists(p: string): Promise<boolean> {
   try {
@@ -71,8 +41,8 @@ function parseEnvKeysFromExample(content: string): Set<string> {
   return keys;
 }
 
-export async function runEnvGenerate(argv: string[] = []) {
-  const flags = parseEnvArgs(argv);
+export async function runEnvGenerate(opts: Partial<EnvGenerateFlags> = {}) {
+  const flags: EnvGenerateFlags = { ...defaultEnvFlags, ...opts };
   const cwd = process.cwd();
   const outPath = path.resolve(cwd, flags.out);
   const envPath = path.resolve(cwd, ".env");

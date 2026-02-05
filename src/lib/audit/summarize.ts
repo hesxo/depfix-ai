@@ -1,4 +1,4 @@
-import { logInfo } from "../ui/log";
+import { logInfo } from "../ui/log.js";
 
 export type Severity = "low" | "moderate" | "high" | "critical";
 

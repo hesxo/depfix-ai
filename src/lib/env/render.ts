@@ -1,4 +1,4 @@
-import { EnvScanResult } from "./scan";
+import { EnvScanResult } from "./scan.js";
 
 interface GroupedKeys {
   heading: string;

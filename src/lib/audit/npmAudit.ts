@@ -1,5 +1,5 @@
-import { detectPackageManager } from "../pm/detect";
-import { runPmCommand } from "../pm/run";
+import { detectPackageManager } from "../pm/detect.js";
+import { runPmCommand } from "../pm/run.js";
 
 export interface NpmAuditResult {
   pm: "npm" | string;

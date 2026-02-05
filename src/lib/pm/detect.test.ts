@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { detectPackageManager } from "./detect";
+import { detectPackageManager } from "./detect.js";
 
 describe("detectPackageManager", () => {
   it("returns npm for this repository", () => {
