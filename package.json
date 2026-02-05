@@ -6,6 +6,9 @@
     "test": "vitest run",
     "prepack": "npm run build"
   },
+  "files": [
+    "dist/**"
+  ],
   "bin": {
     "depfix-ai": "dist/index.js"
   },
