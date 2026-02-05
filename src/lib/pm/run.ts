@@ -9,6 +9,8 @@ export async function runPmCommand(
   const { stdout, stderr, exitCode } = await execa(pm, args, {
     cwd: options.cwd,
     stdio: options.stdio ?? "pipe",
+    // Never throw on non‑zero exit codes; always resolve with the result.
+    reject: false,
   });
 
   return { stdout, stderr, exitCode };

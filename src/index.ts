@@ -1,18 +1,18 @@
 #!/usr/bin/env node
 
-import { runAudit } from "./lib/audit/npmAudit";
+import { runAuditCommand } from "./commands/audit";
 import { runFix } from "./lib/audit/summarize";
 import { runEnvGenerate } from "./lib/env/write";
 import { runOnboard } from "./lib/safety/backup";
 import { logInfo, logError } from "./lib/ui/log";
 
 export async function main(argv = process.argv.slice(2)) {
-  const [command, subcommand] = argv;
+  const [command, subcommand, ...rest] = argv;
 
   try {
     switch (command) {
       case "audit":
-        await runAudit();
+        await runAuditCommand(rest);
         break;
       case "fix":
         await runFix();
