@@ -19,7 +19,7 @@ export async function main(argv = process.argv.slice(2)) {
         break;
       case "env":
         if (subcommand === "generate") {
-          await runEnvGenerate();
+          await runEnvGenerate(rest);
         } else {
           logError('Usage: depfix-ai env generate');
         }
