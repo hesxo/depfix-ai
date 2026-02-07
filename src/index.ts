@@ -1,7 +1,3 @@
-/**
- * Programmatic entry; CLI entry is bin/run.js (oclif).
- * Export version for consumers.
- */
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
