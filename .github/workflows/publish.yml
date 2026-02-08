@@ -33,7 +33,8 @@ jobs:
         run: pnpm -v
 
       - name: Install
-        run: pnpm install --frozen-lockfile
+        run: pnpm install
+        # Use `pnpm install --frozen-lockfile` and commit pnpm-lock.yaml for reproducible builds
 
       - name: Build
         run: pnpm build
