@@ -1,7 +1,8 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import { scanEnv } from "./scan.js";
+import { generateEnvDocsWithOpenAI } from "./ai.js";
 import { renderEnv } from "./render.js";
+import { scanEnv, scanEnvWithContext } from "./scan.js";
 import { logInfo, logError } from "../ui/log.js";
 
 export interface EnvGenerateFlags {
@@ -9,6 +10,9 @@ export interface EnvGenerateFlags {
   create: boolean;
   force: boolean;
   check: boolean;
+  ai: boolean;
+  model: string;
+  apiKey: string;
 }
 
 const defaultEnvFlags: EnvGenerateFlags = {
@@ -16,6 +20,9 @@ const defaultEnvFlags: EnvGenerateFlags = {
   create: false,
   force: false,
   check: false,
+  ai: false,
+  model: "gpt-4o-mini",
+  apiKey: "",
 };
 
 async function fileExists(p: string): Promise<boolean> {
@@ -47,7 +54,9 @@ export async function runEnvGenerate(opts: Partial<EnvGenerateFlags> = {}) {
   const outPath = path.resolve(cwd, flags.out);
   const envPath = path.resolve(cwd, ".env");
 
-  const scanResult = await scanEnv(cwd);
+  const scanResult = flags.ai
+    ? await scanEnvWithContext(cwd, 2)
+    : await scanEnv(cwd);
 
   if (flags.check) {
     if (!(await fileExists(outPath))) {
@@ -72,8 +81,37 @@ export async function runEnvGenerate(opts: Partial<EnvGenerateFlags> = {}) {
     return;
   }
 
+  let aiDocs: Awaited<ReturnType<typeof generateEnvDocsWithOpenAI>> | undefined;
+  if (flags.ai && scanResult.keys.length > 0) {
+    const apiKey = flags.apiKey || process.env.OPENAI_API_KEY?.trim();
+    if (!apiKey) {
+      logError("AI mode requires OPENAI_API_KEY or --api-key.");
+      process.exitCode = 1;
+      return;
+    }
+    try {
+      logInfo("Generating descriptions with AI…");
+      type Ctx = { file: string; line: number; snippet: string }[];
+      const contexts: Record<string, Ctx> =
+        "contexts" in scanResult && scanResult.contexts
+          ? scanResult.contexts
+          : Object.create(null);
+      aiDocs = await generateEnvDocsWithOpenAI({
+        apiKey,
+        model: flags.model,
+        projectHint: "Practical guidance for developers setting env vars.",
+        contexts,
+        keys: scanResult.keys,
+      });
+    } catch (e) {
+      logError((e as Error)?.message ?? String(e));
+      process.exitCode = 1;
+      return;
+    }
+  }
+
   // Always (re)write the template example file.
-  const exampleContent = renderEnv(scanResult);
+  const exampleContent = renderEnv(scanResult, aiDocs);
   await fs.writeFile(outPath, exampleContent, "utf8");
   logInfo(`Wrote environment template to ${outPath}`);
 

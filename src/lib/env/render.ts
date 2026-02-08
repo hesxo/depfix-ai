@@ -1,4 +1,5 @@
-import { EnvScanResult } from "./scan.js";
+import type { AIEnvDoc } from "./ai.js";
+import type { EnvScanResult } from "./scan.js";
 
 interface GroupedKeys {
   heading: string;
@@ -14,7 +15,10 @@ const GROUPS: { prefix: string; heading: string }[] = [
   { prefix: "VITE_", heading: "Vite env" },
 ];
 
-export function renderEnv(result: EnvScanResult): string {
+export function renderEnv(
+  result: EnvScanResult,
+  aiDocs?: AIEnvDoc[],
+): string {
   const remaining = new Set(result.keys);
   const groups: GroupedKeys[] = [];
 
@@ -32,12 +36,28 @@ export function renderEnv(result: EnvScanResult): string {
     });
   }
 
+  const byKey = aiDocs?.length
+    ? new Map(aiDocs.map((d) => [d.key, d]))
+    : null;
+
   const lines: string[] = [];
 
   for (const group of groups) {
     lines.push(`# ${group.heading}`);
     for (const key of group.keys) {
-      lines.push(`${key}=`);
+      const d = byKey?.get(key);
+      if (d) {
+        const secretNote = d.is_secret
+          ? "Secret value. Do not commit."
+          : "Non-secret value (verify before committing).";
+        lines.push(`# ${d.key}`);
+        lines.push(`# ${d.description}`);
+        lines.push(`# Where to get it: ${d.where_to_get}`);
+        lines.push(`# ${secretNote}`);
+        lines.push(`${d.key}=${d.example_value ?? ""}`);
+      } else {
+        lines.push(`${key}=`);
+      }
     }
     lines.push("");
   }

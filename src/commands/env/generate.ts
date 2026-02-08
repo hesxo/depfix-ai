@@ -20,6 +20,18 @@ export default class EnvGenerate extends Command {
     check: Flags.boolean({
       description: "Verify .env.example contains all required vars; exit 1 if not",
     }),
+    ai: Flags.boolean({
+      description: "Use OpenAI to add descriptions and where-to-get for each variable",
+      default: false,
+    }),
+    model: Flags.string({
+      description: "OpenAI model for AI mode (e.g. gpt-4o-mini)",
+      default: "gpt-4o-mini",
+    }),
+    "api-key": Flags.string({
+      description: "OpenAI API key (default: OPENAI_API_KEY env)",
+      env: "OPENAI_API_KEY",
+    }),
   };
 
   async run(): Promise<void> {
@@ -29,6 +41,9 @@ export default class EnvGenerate extends Command {
       create: flags.create,
       force: flags.force,
       check: flags.check,
+      ai: flags.ai,
+      model: flags.model,
+      apiKey: flags["api-key"] ?? "",
     });
   }
 }
