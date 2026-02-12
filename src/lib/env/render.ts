@@ -73,8 +73,13 @@ export function renderEnvAi(enriched: EnvVarEnriched[]): string {
   for (const heading of headings) {
     const items = byPrefix.get(heading)!;
     lines.push(`# ${heading}`);
-    for (const { key, description, example } of items) {
+    for (const { key, description, example, steps } of items) {
       if (description) lines.push(`# ${description}`);
+      if (steps && steps.length > 0) {
+        for (const step of steps) {
+          lines.push(`# ${step}`);
+        }
+      }
       lines.push(`${key}=${example || ""}`);
       lines.push("");
     }

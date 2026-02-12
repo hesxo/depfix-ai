@@ -2,6 +2,8 @@ export interface EnvVarEnriched {
   key: string;
   description: string;
   example: string;
+  /** Step-by-step setup instructions */
+  steps?: string[];
 }
 
 export interface EnvAiOptions {
@@ -22,11 +24,12 @@ export async function enrichEnvVarsWithAi(
   }
 
   const prompt = `You are helping generate a .env.example file. For each environment variable name below, provide:
-1. A brief description (one line, what it's used for)
-2. A realistic example value (placeholder, not real secrets)
+1. "description" - brief one-line summary (what it's used for)
+2. "example" - realistic placeholder value (not real secrets)
+3. "steps" - array of step-by-step setup instructions (e.g. ["Step 1: Get your API key from https://...", "Step 2: Create a new key in the dashboard", "Step 3: Paste the key here"])
 
-Return a JSON array only, no markdown. Format: [{"key":"VAR_NAME","description":"...","example":"..."}]
-Keep descriptions under 80 chars. Examples should be realistic placeholders like "localhost", "5432", "sk-xxx", "https://api.example.com".
+Return a JSON array only, no markdown. Format: [{"key":"VAR_NAME","description":"...","example":"...","steps":["Step 1: ...","Step 2: ..."]}]
+Keep each step under 80 chars. Use 2-4 steps per variable. Examples: "localhost", "5432", "sk-xxx", "https://api.example.com".
 
 Variables:
 ${keys.join("\n")}`;
@@ -103,10 +106,15 @@ function parseJsonResponse(content: string): EnvVarEnriched[] {
 
   return parsed.map((item: unknown) => {
     const obj = item as Record<string, unknown>;
+    const stepsRaw = obj.steps;
+    const steps = Array.isArray(stepsRaw)
+      ? stepsRaw.map((s) => String(s)).filter(Boolean)
+      : undefined;
     return {
       key: String(obj.key ?? ""),
       description: String(obj.description ?? ""),
       example: String(obj.example ?? ""),
+      steps,
     };
   });
 }

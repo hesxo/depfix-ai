@@ -16,7 +16,7 @@ function normalizeSeverity(s: string | undefined): Severity {
 export default class Audit extends Command {
   static readonly id = "audit";
   static readonly description =
-    "Audit dependencies and summarize vulnerabilities (npm only for now).";
+    "Audit dependencies and summarize vulnerabilities (npm and pnpm).";
 
   static readonly flags = {
     json: Flags.boolean({

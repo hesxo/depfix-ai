@@ -4,7 +4,7 @@ import { runEnvGenerate } from "../../lib/env/write.js";
 export default class EnvGenerate extends Command {
   static readonly id = "env:generate";
   static readonly description =
-    "Generate .env.example from detected environment variable usage in source.";
+    "Generate .env.example from source (Default or AI-assisted with descriptions + steps).";
 
   static readonly flags = {
     out: Flags.string({
