@@ -6,10 +6,13 @@ export interface EnvScanResult {
 }
 
 const INCLUDE_GLOBS = [
-  "src/**/*.{js,jsx,ts,tsx}",
+  "src/**/*.{js,jsx,ts,tsx,mjs,cjs}",
+  "lib/**/*.{js,jsx,ts,tsx,mjs,cjs}",
   "app/**/*.{js,jsx,ts,tsx}",
   "server/**/*.{js,jsx,ts,tsx}",
   "pages/**/*.{js,jsx,ts,tsx}",
+  "scripts/**/*.{js,ts,mjs}",
+  "*.{js,ts,mjs}",
 ];
 
 const EXCLUDE_GLOBS = ["**/node_modules/**", "**/dist/**", "**/.next/**", "**/build/**", "**/coverage/**"];

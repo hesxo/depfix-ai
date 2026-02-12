@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { intro, select, confirm, text } from "@clack/prompts";
+import { intro, select, confirm, password, isCancel, cancel } from "@clack/prompts";
 import pc from "picocolors";
 import { execute } from "@oclif/core";
 import { config as dotenvConfig } from "dotenv";
@@ -118,23 +118,67 @@ async function runEnvGenerateFlow(): Promise<void> {
     ],
   });
 
+  if (isCancel(mode)) {
+    cancel("Cancelled.");
+    process.exit(0);
+  }
+
   if (mode === "ai") {
-    await select({
-      message: "🤖 Select AI model",
+    const provider = await select({
+      message: "🤖 Select AI provider",
       options: [
-        { value: "gpt-4o", label: "GPT-4o" },
-        { value: "gpt-4o-mini", label: "GPT-4o Mini" },
-        { value: "gpt-3.5-turbo", label: "GPT-3.5 Turbo" },
+        { value: "openai", label: "OpenAI (GPT-4o, GPT-3.5)" },
+        { value: "google", label: "Google AI (Gemini)" },
       ],
     });
-    const apiKey = await text({
-      message: "🔑 OpenAI API key (or leave blank to use env)",
-      placeholder: "sk-...",
-    });
-    if (apiKey && typeof apiKey === "string") {
-      process.env.OPENAI_API_KEY = apiKey;
+
+    if (isCancel(provider)) {
+      cancel("Cancelled.");
+      process.exit(0);
     }
-    // Load .env if present
+
+    if (provider === "openai") {
+      await select({
+        message: "🤖 Select model",
+        options: [
+          { value: "gpt-4o", label: "GPT-4o" },
+          { value: "gpt-4o-mini", label: "GPT-4o Mini" },
+          { value: "gpt-3.5-turbo", label: "GPT-3.5 Turbo" },
+        ],
+      });
+      const apiKey = await password({
+        message: "🔑 OpenAI API key (or leave blank to use OPENAI_API_KEY from env)",
+        validate: () => undefined,
+      });
+      if (isCancel(apiKey)) {
+        cancel("Cancelled.");
+        process.exit(0);
+      }
+      if (apiKey && typeof apiKey === "string") {
+        process.env.OPENAI_API_KEY = apiKey;
+      }
+    } else if (provider === "google") {
+      await select({
+        message: "🤖 Select model",
+        options: [
+          { value: "gemini-1.5-pro", label: "Gemini 1.5 Pro" },
+          { value: "gemini-1.5-flash", label: "Gemini 1.5 Flash" },
+          { value: "gemini-1.0-pro", label: "Gemini 1.0 Pro" },
+        ],
+      });
+      const apiKey = await password({
+        message: "🔑 Google AI API key (or leave blank to use GOOGLE_API_KEY from env)",
+        validate: () => undefined,
+      });
+      if (isCancel(apiKey)) {
+        cancel("Cancelled.");
+        process.exit(0);
+      }
+      if (apiKey && typeof apiKey === "string") {
+        process.env.GOOGLE_API_KEY = apiKey;
+      }
+    }
+
     dotenvConfig({ path: join(getProjectCwd(), ".env") });
   }
 

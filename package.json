@@ -22,7 +22,8 @@
     "dist/**"
   ],
   "bin": {
-    "depfix-ai": "bin/run.js"
+    "depfix-ai": "bin/run.js",
+    "depfix-ai-latest": "bin/run-latest.js"
   },
   "repository": {
     "type": "git",

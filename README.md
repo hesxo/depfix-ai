@@ -22,16 +22,18 @@ pnpm add -g depfix-ai
 **Run without installing (npx / pnpm dlx):**
 
 ```bash
+npx depfix-ai@latest         # Recommended: always runs latest (bypasses cache)
+npx depfix-ai-latest         # Same as above (alias)
+npx depfix-ai                # May use cached version
 npx depfix-ai --help
-# or
-pnpm dlx depfix-ai --help
+pnpm dlx depfix-ai@latest
 ```
 
 ---
 
 ## Quick start
 
-After installing globally or with `npx` / `pnpm dlx`:
+Running `npx depfix-ai` or `depfix-ai` with no args launches the **interactive menu**. Or run commands directly:
 
 ```bash
 depfix-ai audit              # Security audit + human summary
@@ -43,8 +45,9 @@ depfix-ai fix                # Preview fixes (dry-run); use --apply to apply
 One-off (no install):
 
 ```bash
+npx depfix-ai@latest         # Interactive menu (recommended – always latest)
 npx depfix-ai audit
-pnpm dlx depfix-ai env generate
+pnpm dlx depfix-ai@latest env generate
 ```
 
 ---
@@ -53,7 +56,7 @@ pnpm dlx depfix-ai env generate
 
 ### `depfix-ai audit`
 
-Run a security audit and get a human-readable summary (npm only for now).
+Run a security audit and get a human-readable summary (npm and pnpm).
 
 | Flag | Description |
 |------|-------------|

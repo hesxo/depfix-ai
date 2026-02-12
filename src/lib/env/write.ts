@@ -2,7 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { scanEnv } from "./scan.js";
 import { renderEnv } from "./render.js";
-import { logInfo, logError } from "../ui/log.js";
+import { logInfo, logError, logSuccess } from "../ui/log.js";
 
 export interface EnvGenerateFlags {
   out: string;
@@ -68,14 +68,14 @@ export async function runEnvGenerate(opts: Partial<EnvGenerateFlags> = {}) {
       return;
     }
 
-    logInfo(`${flags.out} contains all required environment variables.`);
+    logSuccess(`${flags.out} contains all required environment variables.`);
     return;
   }
 
   // Always (re)write the template example file.
   const exampleContent = renderEnv(scanResult);
   await fs.writeFile(outPath, exampleContent, "utf8");
-  logInfo(`Wrote environment template to ${outPath}`);
+  logSuccess(`Wrote environment template to ${outPath}`);
 
   if (flags.create) {
     const envExists = await fileExists(envPath);
@@ -84,7 +84,7 @@ export async function runEnvGenerate(opts: Partial<EnvGenerateFlags> = {}) {
     } else {
       const envContent = scanResult.keys.map((k) => `${k}=`).join("\n") + "\n";
       await fs.writeFile(envPath, envContent, "utf8");
-      logInfo(`Wrote ${envExists ? "updated" : "new"} .env file to ${envPath}`);
+      logSuccess(`Wrote ${envExists ? "updated" : "new"} .env file to ${envPath}`);
     }
   }
 }
