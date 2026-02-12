@@ -19,7 +19,7 @@ jobs:
         with:
           node-version: "24"
       - run: corepack enable
-      - run: pnpm install
+      - run: pnpm install --no-frozen-lockfile
       - run: pnpm build
 
   publish:
@@ -47,19 +47,19 @@ jobs:
         run: pnpm -v
 
       - name: Install
-        run: pnpm install
+        run: pnpm install --no-frozen-lockfile
 
       - name: Build
         run: pnpm build
 
       - name: Show package name + version
         run: |
-          node -p "require('./package.json').name + '@' + require('./package.json').version"
+          jq -r '"\(.name)@\(.version)"' package.json
 
       - name: Fail if version already exists on npm
         run: |
-          NAME=$(node -p "require('./package.json').name")
-          VER=$(node -p "require('./package.json').version")
+          NAME=$(jq -r .name package.json)
+          VER=$(jq -r .version package.json)
           if npm view "$NAME@$VER" version >/dev/null 2>&1; then
             echo "$NAME@$VER already exists on npm. Bump version and push a new tag."
             exit 1
