@@ -1,7 +1,8 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { scanEnv } from "./scan.js";
-import { renderEnv } from "./render.js";
+import { renderEnv, renderEnvAi } from "./render.js";
+import { enrichEnvVarsWithAi, type EnvAiOptions } from "./ai.js";
 import { logInfo, logError, logSuccess } from "../ui/log.js";
 
 export interface EnvGenerateFlags {
@@ -9,6 +10,8 @@ export interface EnvGenerateFlags {
   create: boolean;
   force: boolean;
   check: boolean;
+  /** AI options: adds descriptions and example values */
+  ai?: EnvAiOptions;
 }
 
 const defaultEnvFlags: EnvGenerateFlags = {
@@ -72,8 +75,13 @@ export async function runEnvGenerate(opts: Partial<EnvGenerateFlags> = {}) {
     return;
   }
 
-  // Always (re)write the template example file.
-  const exampleContent = renderEnv(scanResult);
+  let exampleContent: string;
+  if (flags.ai && scanResult.keys.length > 0) {
+    const enriched = await enrichEnvVarsWithAi(scanResult.keys, flags.ai);
+    exampleContent = renderEnvAi(enriched);
+  } else {
+    exampleContent = renderEnv(scanResult);
+  }
   await fs.writeFile(outPath, exampleContent, "utf8");
   logSuccess(`Wrote environment template to ${outPath}`);
 

@@ -2,13 +2,14 @@ import { readFileSync } from "node:fs";
 import { existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { intro, select, confirm, password, isCancel, cancel } from "@clack/prompts";
+import { intro, select, confirm, password, isCancel, cancel, spinner } from "@clack/prompts";
 import pc from "picocolors";
 import { execute } from "@oclif/core";
 import { config as dotenvConfig } from "dotenv";
 import { version } from "../index.js";
 import { detectPackageManager } from "../lib/pm/detect.js";
 import { runEnvGenerate } from "../lib/env/write.js";
+import type { EnvAiOptions } from "../lib/env/ai.js";
 import { runOnboard } from "../lib/safety/backup.js";
 import { runNpmAuditJson } from "../lib/audit/npmAudit.js";
 import {
@@ -113,8 +114,8 @@ async function runEnvGenerateFlow(): Promise<void> {
   const mode = await select({
     message: "📄 How would you like to generate .env.example?",
     options: [
-      { value: "default", label: "Default (fast)" },
-      { value: "ai", label: "AI-assisted" },
+      { value: "default", label: "Default (fast) – variable names only" },
+      { value: "ai", label: "AI-assisted – descriptions + example values (requires API key)" },
     ],
   });
 
@@ -122,6 +123,8 @@ async function runEnvGenerateFlow(): Promise<void> {
     cancel("Cancelled.");
     process.exit(0);
   }
+
+  let aiOptions: EnvAiOptions | undefined;
 
   if (mode === "ai") {
     const provider = await select({
@@ -137,8 +140,13 @@ async function runEnvGenerateFlow(): Promise<void> {
       process.exit(0);
     }
 
+    dotenvConfig({ path: join(getProjectCwd(), ".env") });
+
+    let model: string;
+    let apiKey: string;
+
     if (provider === "openai") {
-      await select({
+      const modelChoice = await select({
         message: "🤖 Select model",
         options: [
           { value: "gpt-4o", label: "GPT-4o" },
@@ -146,19 +154,26 @@ async function runEnvGenerateFlow(): Promise<void> {
           { value: "gpt-3.5-turbo", label: "GPT-3.5 Turbo" },
         ],
       });
-      const apiKey = await password({
-        message: "🔑 OpenAI API key (or leave blank to use OPENAI_API_KEY from env)",
-        validate: () => undefined,
-      });
-      if (isCancel(apiKey)) {
+      if (isCancel(modelChoice)) {
         cancel("Cancelled.");
         process.exit(0);
       }
-      if (apiKey && typeof apiKey === "string") {
-        process.env.OPENAI_API_KEY = apiKey;
+      model = modelChoice as string;
+      const keyInput = await password({
+        message: "🔑 OpenAI API key (or leave blank to use OPENAI_API_KEY from env)",
+        validate: () => undefined,
+      });
+      if (isCancel(keyInput)) {
+        cancel("Cancelled.");
+        process.exit(0);
       }
-    } else if (provider === "google") {
-      await select({
+      apiKey = (keyInput && typeof keyInput === "string" ? keyInput : process.env.OPENAI_API_KEY) ?? "";
+      if (!apiKey) {
+        logError("OpenAI API key is required for AI-assisted env generation.");
+        return;
+      }
+    } else {
+      const modelChoice = await select({
         message: "🤖 Select model",
         options: [
           { value: "gemini-1.5-pro", label: "Gemini 1.5 Pro" },
@@ -166,23 +181,42 @@ async function runEnvGenerateFlow(): Promise<void> {
           { value: "gemini-1.0-pro", label: "Gemini 1.0 Pro" },
         ],
       });
-      const apiKey = await password({
-        message: "🔑 Google AI API key (or leave blank to use GOOGLE_API_KEY from env)",
-        validate: () => undefined,
-      });
-      if (isCancel(apiKey)) {
+      if (isCancel(modelChoice)) {
         cancel("Cancelled.");
         process.exit(0);
       }
-      if (apiKey && typeof apiKey === "string") {
-        process.env.GOOGLE_API_KEY = apiKey;
+      model = modelChoice as string;
+      const keyInput = await password({
+        message: "🔑 Google AI API key (or leave blank to use GOOGLE_API_KEY from env)",
+        validate: () => undefined,
+      });
+      if (isCancel(keyInput)) {
+        cancel("Cancelled.");
+        process.exit(0);
+      }
+      apiKey = (keyInput && typeof keyInput === "string" ? keyInput : process.env.GOOGLE_API_KEY) ?? "";
+      if (!apiKey) {
+        logError("Google API key is required for AI-assisted env generation.");
+        return;
       }
     }
 
-    dotenvConfig({ path: join(getProjectCwd(), ".env") });
+    aiOptions = { provider: provider as "openai" | "google", model, apiKey };
   }
 
-  await runEnvGenerate({ out: ".env.example" });
+  if (aiOptions) {
+    const s = spinner();
+    s.start("Generating .env.example with AI (descriptions + examples)...");
+    try {
+      await runEnvGenerate({ out: ".env.example", ai: aiOptions });
+      s.stop("Done.");
+    } catch (err) {
+      s.stop("Failed.");
+      logError(String(err));
+    }
+  } else {
+    await runEnvGenerate({ out: ".env.example" });
+  }
 }
 
 export async function runInteractive(): Promise<void> {

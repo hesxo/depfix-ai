@@ -8,25 +8,26 @@ export interface NpmAuditResult {
 }
 
 /**
- * Run an npm audit in JSON mode.
+ * Run an audit in JSON mode.
  *
- * For v0.1.0 we only support npm; if another package manager
- * is detected we return early without running anything.
+ * Supports npm and pnpm. Both output JSON compatible with our summarize logic.
  */
 export async function runNpmAuditJson(cwd = process.cwd()): Promise<NpmAuditResult> {
   const pm = detectPackageManager(cwd);
 
-  if (pm !== "npm") {
+  if (pm !== "npm" && pm !== "pnpm") {
     return { pm, rawJson: undefined, exitCode: undefined };
   }
 
-  const { stdout, exitCode } = await runPmCommand(pm, ["audit", "--json"], {
+  const { stdout, stderr, exitCode } = await runPmCommand(pm, ["audit", "--json"], {
     cwd,
   });
 
+  // pnpm may send JSON to stderr when exitCode is non-zero
+  const rawJson = stdout?.trim() || stderr?.trim();
   return {
     pm,
-    rawJson: stdout,
+    rawJson: rawJson || undefined,
     exitCode,
   };
 }
