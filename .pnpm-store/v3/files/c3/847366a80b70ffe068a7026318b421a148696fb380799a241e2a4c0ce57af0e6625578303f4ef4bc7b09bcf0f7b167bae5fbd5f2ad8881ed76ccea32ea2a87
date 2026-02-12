@@ -1,0 +1,1 @@
+{"version":3,"file":"npmAudit.d.ts","sourceRoot":"","sources":["../../../src/lib/audit/npmAudit.ts"],"names":[],"mappings":"AAGA,MAAM,WAAW,cAAc;IAC7B,EAAE,EAAE,KAAK,GAAG,MAAM,CAAC;IACnB,OAAO,EAAE,MAAM,GAAG,SAAS,CAAC;IAC5B,QAAQ,EAAE,MAAM,GAAG,SAAS,CAAC;CAC9B;AAED;;;;;GAKG;AACH,wBAAsB,eAAe,CAAC,GAAG,SAAgB,GAAG,OAAO,CAAC,cAAc,CAAC,CAgBlF"}
