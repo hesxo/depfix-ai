@@ -142,5 +142,3 @@ npm test
 ## License
 
 MIT
-
-lol
