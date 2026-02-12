@@ -1,3 +1,4 @@
+import { writeFile } from "node:fs/promises";
 import { logInfo } from "../ui/log.js";
 
 export type Severity = "low" | "moderate" | "high" | "critical";
@@ -124,4 +125,36 @@ export async function runFix() {
   logInfo("Running depfix-ai fix (not implemented yet).");
 }
 
+export function formatAuditReportMarkdown(summary: AuditSummary): string {
+  const { counts, impactedPackages } = summary;
+  const lines: string[] = [
+    "# Audit Report",
+    "",
+    "## Vulnerability Summary",
+    "",
+    "| Severity | Count |",
+    "|----------|-------|",
+    `| low | ${counts.low} |`,
+    `| moderate | ${counts.moderate} |`,
+    `| high | ${counts.high} |`,
+    `| critical | ${counts.critical} |`,
+    "",
+  ];
+  if (impactedPackages.length > 0) {
+    lines.push("## Top Affected Packages", "", "| Package | Issues |", "|---------|--------|");
+    for (const pkg of impactedPackages) {
+      lines.push(`| ${pkg.name} | ${pkg.count} |`);
+    }
+    lines.push("");
+  }
+  return lines.join("\n");
+}
+
+export async function writeAuditReport(
+  summary: AuditSummary,
+  path: string,
+): Promise<void> {
+  const markdown = formatAuditReportMarkdown(summary);
+  await writeFile(path, markdown, "utf8");
+}
 

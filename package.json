@@ -8,6 +8,7 @@
   },
   "packageManager": "pnpm@9.15.0",
   "scripts": {
+    "start": "node bin/run.js",
     "build": "tsc -b",
     "test": "vitest run",
     "prepack": "npm run build",
