@@ -168,7 +168,7 @@ async function runEnvGenerateFlow(): Promise<void> {
       cancel("Cancelled.");
       process.exit(0);
     }
-    dotenvConfig({ path: join(getProjectCwd(), ".env") });
+    dotenvConfig({ path: join(getProjectCwd(), ".env"), quiet: true });
     let model: string;
     let apiKey: string;
     if (provider === "openai") {
@@ -252,7 +252,7 @@ async function runEnvGenerateFlow(): Promise<void> {
 
 export async function runInteractive(): Promise<void> {
   const cwd = getProjectCwd();
-  dotenvConfig({ path: join(cwd, ".env") });
+  dotenvConfig({ path: join(cwd, ".env"), quiet: true });
   const [userName, branch, pm, projectName] = await Promise.all([
     getGitUserFullName(),
     getGitBranch(),
@@ -270,37 +270,43 @@ export async function runInteractive(): Promise<void> {
     pc.cyan(`📦 Project: `) + pc.gray(` ${projectName}  (package.json)`),
   ];
   intro(lines.join("\n"));
-  const choice = await select({
-    message: "What would you like to do?",
-    options: [
-      { value: "audit", label: "🔍 Audit" },
-      { value: "env", label: "📄 Env generate" },
-      { value: "onboard", label: "👥 Onboard" },
-      { value: "fix", label: "🔧 Fix" },
-      { value: "quit", label: "🚪 Quit" },
-    ],
-  });
-  if (choice === "quit") {
-    process.exit(0);
-  }
-  if (choice === "audit") {
-    await runAuditWithReport();
-    return;
-  }
-  if (choice === "env") {
-    await runEnvGenerateFlow();
-    return;
-  }
-  if (choice === "onboard") {
-    await runOnboard({});
-    return;
-  }
-  if (choice === "fix") {
-    await execute({
-      dir: getBinRunUrl(),
-      args: ["fix"],
+
+  while (true) {
+    const choice = await select({
+      message: "What would you like to do?",
+      options: [
+        { value: "audit", label: "🔍 Audit – Check vulnerabilities" },
+        { value: "fix", label: "🔧 Fix – Apply fixes" },
+        { value: "env", label: "📄 Env generate – Generate .env.example" },
+        { value: "onboard", label: "👥 Onboard – Full setup (install + env + test)" },
+        { value: "quit", label: "🚪 Quit" },
+      ],
     });
-    return;
+    if (isCancel(choice)) {
+      cancel("Cancelled.");
+      process.exit(0);
+    }
+    if (choice === "quit") {
+      process.exit(0);
+    }
+    if (choice === "audit") {
+      await runAuditWithReport();
+      continue;
+    }
+    if (choice === "env") {
+      await runEnvGenerateFlow();
+      continue;
+    }
+    if (choice === "onboard") {
+      await runOnboard({});
+      continue;
+    }
+    if (choice === "fix") {
+      await execute({
+        dir: getBinRunUrl(),
+        args: ["fix"],
+      });
+      continue;
+    }
   }
-  process.exit(0);
 }
