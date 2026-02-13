@@ -44,7 +44,7 @@ export default class Audit extends Command {
     }
 
     if (!rawJson) {
-      logError("npm audit did not return JSON output.");
+      logError("Audit did not return JSON output.");
       if (typeof exitCode === "number") this.exit(exitCode);
       return;
     }

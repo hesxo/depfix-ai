@@ -116,7 +116,7 @@ async function runAuditWithReport(): Promise<void> {
     return;
   }
   if (!rawJson) {
-    logError("npm audit did not return JSON output.");
+    logError("Audit did not return JSON output.");
     return;
   }
   let parsed: unknown;
