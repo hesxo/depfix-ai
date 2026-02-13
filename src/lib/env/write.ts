@@ -1,8 +1,12 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import { scanEnv } from "./scan.js";
-import { renderEnv, renderEnvAi } from "./render.js";
-import { enrichEnvVarsWithAi, type EnvAiOptions } from "./ai.js";
+import { scanProjectForEnvKeys } from "./scan.js";
+import { renderEnv, renderEnvAi } from "./render.js"
+import {
+  generateEnvDocsWithOpenAI,
+  generateEnvDocsWithGoogle,
+  type AIGenerateOptions,
+} from "./ai.js";
 import { logInfo, logError, logSuccess } from "../ui/log.js";
 
 export interface EnvGenerateFlags {
@@ -10,8 +14,14 @@ export interface EnvGenerateFlags {
   create: boolean;
   force: boolean;
   check: boolean;
-  /** AI options: adds descriptions and example values */
-  ai?: EnvAiOptions;
+  cwd?: string;
+  includeLowercase?: boolean;
+  ai?: {
+    provider?: "openai" | "google";
+    model: string;
+    apiKey: string;
+    projectHint?: string;
+  };
 }
 
 const defaultEnvFlags: EnvGenerateFlags = {
@@ -32,8 +42,7 @@ async function fileExists(p: string): Promise<boolean> {
 
 function parseEnvKeysFromExample(content: string): Set<string> {
   const keys = new Set<string>();
-  const lines = content.split(/\r?\n/);
-  for (const line of lines) {
+  for (const line of content.split(/\r?\n/)) {
     const trimmed = line.trim();
     if (!trimmed || trimmed.startsWith("#")) continue;
     const eqIndex = trimmed.indexOf("=");
@@ -46,11 +55,21 @@ function parseEnvKeysFromExample(content: string): Set<string> {
 
 export async function runEnvGenerate(opts: Partial<EnvGenerateFlags> = {}) {
   const flags: EnvGenerateFlags = { ...defaultEnvFlags, ...opts };
-  const cwd = process.cwd();
+  const cwd = opts.cwd ?? process.cwd();
   const outPath = path.resolve(cwd, flags.out);
   const envPath = path.resolve(cwd, ".env");
 
-  const scanResult = await scanEnv(cwd);
+  const scanResult = scanProjectForEnvKeys({
+    rootDir: cwd,
+    includeLowercase: flags.includeLowercase,
+  });
+
+  const keys = Array.from(scanResult.keys).sort();
+  const result = { keys, filesScanned: scanResult.filesScanned, contexts: scanResult.contexts };
+
+  if (keys.length === 0) {
+    logInfo("No environment variables found in source. Creating minimal .env.example template.");
+  }
 
   if (flags.check) {
     if (!(await fileExists(outPath))) {
@@ -58,29 +77,34 @@ export async function runEnvGenerate(opts: Partial<EnvGenerateFlags> = {}) {
       process.exitCode = 1;
       return;
     }
-
     const existing = await fs.readFile(outPath, "utf8");
     const existingKeys = parseEnvKeysFromExample(existing);
-    const missing = scanResult.keys.filter((k) => !existingKeys.has(k));
-
+    const missing = keys.filter((k) => !existingKeys.has(k));
     if (missing.length > 0) {
-      logError(
-        `${flags.out} is missing the following environment variables: ${missing.join(", ")}`,
-      );
+      logError(`${flags.out} is missing the following environment variables: ${missing.join(", ")}`);
       process.exitCode = 1;
       return;
     }
-
     logSuccess(`${flags.out} contains all required environment variables.`);
     return;
   }
 
   let exampleContent: string;
-  if (flags.ai && scanResult.keys.length > 0) {
-    const enriched = await enrichEnvVarsWithAi(scanResult.keys, flags.ai);
-    exampleContent = renderEnvAi(enriched);
+  if (flags.ai && keys.length > 0 && flags.ai.apiKey) {
+    const opts = {
+      apiKey: flags.ai.apiKey,
+      model: flags.ai.model,
+      projectHint: flags.ai.projectHint,
+      contexts: result.contexts,
+      keys,
+    };
+    const docs =
+      flags.ai.provider === "google"
+        ? await generateEnvDocsWithGoogle(opts)
+        : await generateEnvDocsWithOpenAI(opts);
+    exampleContent = renderEnvAi(docs);
   } else {
-    exampleContent = renderEnv(scanResult);
+    exampleContent = renderEnv(result);
   }
   await fs.writeFile(outPath, exampleContent, "utf8");
   logSuccess(`Wrote environment template to ${outPath}`);
@@ -90,10 +114,9 @@ export async function runEnvGenerate(opts: Partial<EnvGenerateFlags> = {}) {
     if (envExists && !flags.force) {
       logInfo(`.env already exists; not overwriting. Use --force to overwrite.`);
     } else {
-      const envContent = scanResult.keys.map((k) => `${k}=`).join("\n") + "\n";
+      const envContent = keys.map((k) => `${k}=`).join("\n") + "\n";
       await fs.writeFile(envPath, envContent, "utf8");
       logSuccess(`Wrote ${envExists ? "updated" : "new"} .env file to ${envPath}`);
     }
   }
 }
-

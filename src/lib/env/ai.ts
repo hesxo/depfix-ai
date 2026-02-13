@@ -1,120 +1,230 @@
-export interface EnvVarEnriched {
+export type AIEnvDoc = {
   key: string;
   description: string;
-  example: string;
-  /** Step-by-step setup instructions */
-  steps?: string[];
-}
+  where_to_get: string;
+  example_value: string;
+  is_secret: boolean;
+};
 
-export interface EnvAiOptions {
-  provider: "openai" | "google";
-  model: string;
+export type AIGenerateOptions = {
   apiKey: string;
+  model: string;
+  projectHint?: string;
+  contexts: Record<string, { file: string; line: number; snippet: string }[]>;
+  keys: string[];
+};
+
+const JSON_SCHEMA = {
+  name: "env_docs",
+  strict: true,
+  schema: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      items: {
+        type: "array",
+        items: {
+          type: "object",
+          additionalProperties: false,
+          properties: {
+            key: { type: "string" },
+            description: { type: "string" },
+            where_to_get: { type: "string" },
+            example_value: { type: "string" },
+            is_secret: { type: "boolean" },
+          },
+          required: [
+            "key",
+            "description",
+            "where_to_get",
+            "example_value",
+            "is_secret",
+          ],
+        },
+      },
+    },
+    required: ["items"],
+  },
+} as const;
+
+function buildInput(opts: AIGenerateOptions) {
+  const lines = opts.keys.map((k) => {
+    const ctx = opts.contexts[k]?.[0];
+    const seenAt = ctx ? `${ctx.file}:${ctx.line}` : "unknown";
+    const snippet = ctx ? ctx.snippet : "";
+    return `- ${k}\n  seen_at: ${seenAt}\n  snippet: ${snippet}`;
+  });
+
+  const system = [
+    "You generate documentation for environment variables.",
+    "Return ONLY JSON that matches the provided JSON Schema.",
+    "Do not include markdown or extra text.",
+    "Never output real secrets. Use safe placeholders.",
+    "Keep descriptions short and practical.",
+    "where_to_get must be actionable (dashboard, secret manager, CI, local service, etc.).",
+  ].join(" ");
+
+  const user = [
+    opts.projectHint ? `Project hint: ${opts.projectHint}` : "",
+    "Variables:",
+    ...lines,
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  return [
+    { role: "system", content: system },
+    { role: "user", content: user },
+  ];
 }
 
-/**
- * Use AI to generate descriptions and example values for env vars.
- */
-export async function enrichEnvVarsWithAi(
-  keys: string[],
-  options: EnvAiOptions,
-): Promise<EnvVarEnriched[]> {
-  if (keys.length === 0) {
-    return [];
+function extractTextFromResponses(data: any): string {
+  if (typeof data?.output_text === "string" && data.output_text.trim())
+    return data.output_text;
+
+  const out = data?.output;
+  if (Array.isArray(out)) {
+    for (const item of out) {
+      const content = item?.content;
+      if (!Array.isArray(content)) continue;
+      for (const c of content) {
+        if (typeof c?.text === "string" && c.text.trim()) return c.text;
+      }
+    }
   }
-
-  const prompt = `You are helping generate a .env.example file. For each environment variable name below, provide:
-1. "description" - brief one-line summary (what it's used for)
-2. "example" - realistic placeholder value (not real secrets)
-3. "steps" - array of step-by-step setup instructions (e.g. ["Step 1: Get your API key from https://...", "Step 2: Create a new key in the dashboard", "Step 3: Paste the key here"])
-
-Return a JSON array only, no markdown. Format: [{"key":"VAR_NAME","description":"...","example":"...","steps":["Step 1: ...","Step 2: ..."]}]
-Keep each step under 80 chars. Use 2-4 steps per variable. Examples: "localhost", "5432", "sk-xxx", "https://api.example.com".
-
-Variables:
-${keys.join("\n")}`;
-
-  if (options.provider === "openai") {
-    return callOpenAI(prompt, options.model, options.apiKey);
-  }
-  return callGoogle(prompt, options.model, options.apiKey);
+  return "";
 }
 
-async function callOpenAI(
-  prompt: string,
-  model: string,
-  apiKey: string,
-): Promise<EnvVarEnriched[]> {
-  const res = await fetch("https://api.openai.com/v1/chat/completions", {
+function tryParseJsonLoose(raw: string): any | null {
+  // First try direct parse
+  try {
+    return JSON.parse(raw);
+  } catch {
+    // Try to extract the first {...} block
+    const m = raw.match(/\{[\s\S]*\}/);
+    if (!m) return null;
+    try {
+      return JSON.parse(m[0]);
+    } catch {
+      return null;
+    }
+  }
+}
+
+export async function generateEnvDocsWithOpenAI(
+  opts: AIGenerateOptions
+): Promise<AIEnvDoc[]> {
+  const input = buildInput(opts);
+
+  const res = await fetch("https://api.openai.com/v1/responses", {
     method: "POST",
     headers: {
+      Authorization: `Bearer ${opts.apiKey}`,
       "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`,
     },
     body: JSON.stringify({
-      model,
-      messages: [{ role: "user", content: prompt }],
-      temperature: 0.3,
+      model: opts.model,
+      input,
+      text: {
+        format: {
+          type: "json_schema",
+          ...JSON_SCHEMA,
+        },
+      },
     }),
   });
 
   if (!res.ok) {
-    const err = await res.text();
-    throw new Error(`OpenAI API error ${res.status}: ${err}`);
+    const text = await res.text();
+    throw new Error(`OpenAI request failed (${res.status}): ${text}`);
   }
 
-  const data = (await res.json()) as { choices?: { message?: { content?: string } }[] };
-  const content = data.choices?.[0]?.message?.content;
-  if (!content) throw new Error("No response from OpenAI");
+  const data: any = await res.json();
+  const raw = extractTextFromResponses(data).trim();
 
-  return parseJsonResponse(content);
+  const parsed = tryParseJsonLoose(raw);
+  if (!parsed) {
+    throw new Error(
+      "AI output was not valid JSON. Try again, or use a different model."
+    );
+  }
+
+  const items = Array.isArray(parsed?.items) ? parsed.items : [];
+  return items
+    .map((x: any) => ({
+      key: String(x.key ?? ""),
+      description: String(x.description ?? ""),
+      where_to_get: String(x.where_to_get ?? ""),
+      example_value: String(x.example_value ?? ""),
+      is_secret: Boolean(x.is_secret),
+    }))
+    .filter((x: AIEnvDoc) => x.key.length > 0);
 }
 
-async function callGoogle(
-  prompt: string,
-  model: string,
-  apiKey: string,
-): Promise<EnvVarEnriched[]> {
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+/**
+ * Generate env docs using Google Gemini API.
+ */
+export async function generateEnvDocsWithGoogle(
+  opts: AIGenerateOptions
+): Promise<AIEnvDoc[]> {
+  const lines = opts.keys.map((k) => {
+    const ctx = opts.contexts[k]?.[0];
+    const seenAt = ctx ? `${ctx.file}:${ctx.line}` : "unknown";
+    const snippet = ctx ? ctx.snippet : "";
+    return `- ${k}\n  seen_at: ${seenAt}\n  snippet: ${snippet}`;
+  });
+
+  const prompt = [
+    opts.projectHint ? `Project hint: ${opts.projectHint}` : "",
+    "Generate documentation for these environment variables. Return ONLY valid JSON with this exact structure:",
+    '{"items":[{"key":"VAR","description":"...","where_to_get":"...","example_value":"...","is_secret":true|false}]}',
+    "Never output real secrets. Use safe placeholders. Keep descriptions short.",
+    "",
+    "Variables:",
+    ...lines,
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${opts.model}:generateContent?key=${opts.apiKey}`;
   const res = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       contents: [{ parts: [{ text: prompt }] }],
-      generationConfig: { temperature: 0.3 },
+      generationConfig: {
+        temperature: 0.3,
+        responseMimeType: "application/json",
+      },
     }),
   });
 
   if (!res.ok) {
-    const err = await res.text();
-    throw new Error(`Google AI API error ${res.status}: ${err}`);
+    const text = await res.text();
+    throw new Error(`Google AI request failed (${res.status}): ${text}`);
   }
 
   const data = (await res.json()) as {
     candidates?: { content?: { parts?: { text?: string }[] } }[];
   };
-  const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
-  if (!text) throw new Error("No response from Google AI");
+  const raw =
+    data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() ?? "";
 
-  return parseJsonResponse(text);
-}
+  const parsed = tryParseJsonLoose(raw);
+  if (!parsed) {
+    throw new Error(
+      "Google AI output was not valid JSON. Try again, or use a different model."
+    );
+  }
 
-function parseJsonResponse(content: string): EnvVarEnriched[] {
-  const cleaned = content.replace(/```json\n?|\n?```/g, "").trim();
-  const parsed = JSON.parse(cleaned) as unknown;
-  if (!Array.isArray(parsed)) throw new Error("AI did not return an array");
-
-  return parsed.map((item: unknown) => {
-    const obj = item as Record<string, unknown>;
-    const stepsRaw = obj.steps;
-    const steps = Array.isArray(stepsRaw)
-      ? stepsRaw.map((s) => String(s)).filter(Boolean)
-      : undefined;
-    return {
-      key: String(obj.key ?? ""),
-      description: String(obj.description ?? ""),
-      example: String(obj.example ?? ""),
-      steps,
-    };
-  });
+  const items = Array.isArray(parsed?.items) ? parsed.items : [];
+  return items
+    .map((x: any) => ({
+      key: String(x.key ?? ""),
+      description: String(x.description ?? ""),
+      where_to_get: String(x.where_to_get ?? ""),
+      example_value: String(x.example_value ?? ""),
+      is_secret: Boolean(x.is_secret),
+    }))
+    .filter((x: AIEnvDoc) => x.key.length > 0);
 }

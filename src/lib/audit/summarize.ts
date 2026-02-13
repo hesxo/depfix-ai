@@ -1,4 +1,4 @@
-import { writeFile } from "node:fs/promises";
+import fs from "node:fs/promises";
 import { logInfo } from "../ui/log.js";
 
 export type Severity = "low" | "moderate" | "high" | "critical";
@@ -119,42 +119,45 @@ export function printAuditSummary(summary: AuditSummary) {
   );
 }
 
+/**
+ * Write an audit summary to a markdown file.
+ */
+export async function writeAuditReport(
+  summary: AuditSummary,
+  reportPath: string,
+): Promise<void> {
+  const { counts, impactedPackages } = summary;
+  const lines = [
+    "# Audit Report",
+    "",
+    "## Vulnerability Summary",
+    "",
+    `| Severity | Count |`,
+    `|----------|-------|`,
+    `| Low | ${counts.low} |`,
+    `| Moderate | ${counts.moderate} |`,
+    `| High | ${counts.high} |`,
+    `| Critical | ${counts.critical} |`,
+    "",
+    "## Top Affected Packages",
+    "",
+    impactedPackages.length > 0
+      ? impactedPackages.map((p) => `- **${p.name}**: ${p.count} issue(s)`).join("\n")
+      : "None",
+    "",
+    "## Next Steps",
+    "",
+    "- Run `npm audit fix` or `pnpm audit --fix` to apply safe automatic fixes.",
+    "- For remaining issues, review advisories and consider upgrading or replacing packages.",
+    "",
+  ];
+  await fs.writeFile(reportPath, lines.join("\n"), "utf8");
+}
+
 // Temporary placeholder to keep the existing `fix` command wired up.
 // This can later be replaced with a real remediation flow.
 export async function runFix() {
   logInfo("Running depfix-ai fix (not implemented yet).");
 }
 
-export function formatAuditReportMarkdown(summary: AuditSummary): string {
-  const { counts, impactedPackages } = summary;
-  const lines: string[] = [
-    "# Audit Report",
-    "",
-    "## Vulnerability Summary",
-    "",
-    "| Severity | Count |",
-    "|----------|-------|",
-    `| low | ${counts.low} |`,
-    `| moderate | ${counts.moderate} |`,
-    `| high | ${counts.high} |`,
-    `| critical | ${counts.critical} |`,
-    "",
-  ];
-  if (impactedPackages.length > 0) {
-    lines.push("## Top Affected Packages", "", "| Package | Issues |", "|---------|--------|");
-    for (const pkg of impactedPackages) {
-      lines.push(`| ${pkg.name} | ${pkg.count} |`);
-    }
-    lines.push("");
-  }
-  return lines.join("\n");
-}
-
-export async function writeAuditReport(
-  summary: AuditSummary,
-  path: string,
-): Promise<void> {
-  const markdown = formatAuditReportMarkdown(summary);
-  await writeFile(path, markdown, "utf8");
-}
 
